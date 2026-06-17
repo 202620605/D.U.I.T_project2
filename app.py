@@ -2,6 +2,7 @@ import streamlit as st
 import sqlite3
 import os
 
+# 페이지 기본 설정 (가장 최상단에 위치해야 합니다)
 st.set_page_config(page_title="KBO 통합 관제탑", page_icon="⚾", layout="wide")
 
 # DB 연결 함수
@@ -22,7 +23,7 @@ KBO_CLUBS = {
     "키움 히어로즈": {"stadium": "고척 스카이돔", "homepage": "https://www.heroesbaseballclub.co.kr/", "insta": "https://www.instagram.com/heroesbaseballclub/", "emblem": "🦸"}
 }
 
-# 세션 로그인 상태 초기화
+# 세션 로그인 상태 초기화 (오타 수정 완료: s.session_state -> st.session_state)
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
     st.session_state["user"] = None
@@ -42,35 +43,41 @@ if not st.session_state["logged_in"]:
         login_user = st.text_input("아이디", key="login_id")
         login_pw = st.text_input("비밀번호", type="password", key="login_pw")
         if st.button("로그인"):
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT favorite_team FROM users WHERE username=? AND password=?", (login_user, login_pw))
-            result = cursor.fetchone()
-            conn.close()
-            
-            if result:
-                st.session_state["logged_in"] = True
-                st.session_state["user"] = login_user
-                st.session_state["fav_team"] = result[0]
-                st.success(f"{login_user}님 환영합니다! 선호 구단: {result[0]}")
-                st.rerun()
+            if login_user and login_pw:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT favorite_team FROM users WHERE username=? AND password=?", (login_user, login_pw))
+                result = cursor.fetchone()
+                conn.close()
+                
+                if result:
+                    st.session_state["logged_in"] = True
+                    st.session_state["user"] = login_user
+                    st.session_state["fav_team"] = result[0]
+                    st.success(f"{login_user}님 환영합니다! 선호 구단: {result[0]}")
+                    st.rerun()
+                else:
+                    st.error("아이디 또는 비밀번호가 틀렸습니다.")
             else:
-                st.error("아이디 또는 비밀번호가 틀렸습니다.")
+                st.warning("아이디와 비밀번호를 모두 입력해 주세요.")
                 
     with tab2:
         reg_user = st.text_input("새 아이디", key="reg_id")
         reg_pw = st.text_input("새 비밀번호", type="password", key="reg_pw")
         reg_team = st.selectbox("응원 구단 선택", list(KBO_CLUBS.keys()), key="reg_team")
         if st.button("회원가입"):
-            try:
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO users VALUES (?, ?, ?)", (reg_user, reg_pw, reg_team))
-                conn.commit()
-                conn.close()
-                st.success("회원가입 완료! 로그인 탭에서 로그인해 주세요.")
-            except sqlite3.IntegrityError:
-                st.error("이미 존재하는 아이디입니다.")
+            if reg_user and reg_pw:
+                try:
+                    conn = get_db_connection()
+                    cursor = conn.cursor()
+                    cursor.execute("INSERT INTO users VALUES (?, ?, ?)", (reg_user, reg_pw, reg_team))
+                    conn.commit()
+                    conn.close()
+                    st.success("회원가입 완료! 로그인 탭에서 로그인해 주세요.")
+                except sqlite3.IntegrityError:
+                    st.error("이미 존재하는 아이디입니다.")
+            else:
+                st.warning("아이디와 비밀번호를 모두 입력해 주세요.")
 
 # 로그인 완료 후 메인 대시보드
 else:
@@ -80,21 +87,19 @@ else:
     # 선호 구단 정보 로드
     team_data = KBO_CLUBS[st.session_state["fav_team"]]
     
-    col1, col2 = st.columns([1, 3])
+    col1, col2 = st.columns([1, 4])
     with col1:
-        # 이모지로 대체 출력 (assets/에 실제 png 배치 시 st.image(f"assets/{팀명}.png")로 변경 가능)
-        st.text(team_data["emblem"])
+        st.write(f"### {team_data['emblem']}")
         st.metric(label="나의 응원 구단", value=st.session_state["fav_team"])
     with col2:
         st.subheader("📌 구단 오피셜 허브 (크롤링 연계)")
         st.info(f"🏟️ **홈구장:** {team_data['stadium']}")
         
-        # 실제 연계 크롤러가 들어갈 영역 가이드
         st.markdown(f"🔗 [네이버 스포츠 {st.session_state['fav_team']} 섹션 바로가기](https://sports.news.naver.com/kbaseball/index)")
         st.markdown(f"📸 [공식 인스타그램 연계피드 확인]({team_data['insta']})")
         st.markdown(f"🏠 [공식 홈페이지 선수단 정보]({team_data['homepage']})")
         
     if st.sidebar.button("로그아웃"):
         st.session_state["logged_in"] = False
+        st.session_state["user"] = None
         st.rerun()
-
