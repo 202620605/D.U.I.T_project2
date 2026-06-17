@@ -2,12 +2,59 @@ import streamlit as st
 import sqlite3
 import os
 
-# 페이지 기본 설정 (가장 최상단에 위치해야 합니다)
+# 페이지 기본 설정 (가장 최상단 필수)
 st.set_page_config(page_title="KBO 통합 관제탑", page_icon="⚾", layout="wide")
 
-# DB 연결 함수
+# DB 연결 및 테이블 자동 생성 함수 (가장 안전한 방식)
 def get_db_connection():
-    return sqlite3.connect("baseball.db")
+    db_path = "baseball.db"
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    # 회원 테이블
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            username TEXT PRIMARY KEY,
+            password TEXT,
+            favorite_team TEXT
+        )
+    """)
+    # 직관 일기 테이블
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS diary (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
+            date TEXT,
+            opposing_team TEXT,
+            score TEXT,
+            weather TEXT,
+            companion TEXT,
+            mood TEXT,
+            content TEXT,
+            lineup TEXT,
+            pitcher TEXT
+        )
+    """)
+    # 과거 데이터 테이블
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS game_history (
+            date TEXT,
+            team TEXT,
+            opposing_team TEXT,
+            score TEXT,
+            lineup TEXT,
+            pitcher TEXT,
+            PRIMARY KEY (date, team)
+        )
+    """)
+    # 샘플 데이터 삽입
+    cursor.execute("""
+        INSERT OR IGNORE INTO game_history VALUES 
+        ('2026-06-17', 'LG 트윈스', 'KIA 타이거즈', '5:4', '1.홍창기 2.신민재 3.김현수 4.오스틴 5.문보경', '임찬규'),
+        ('2026-06-17', 'KIA 타이거즈', 'LG 트윈스', '4:5', '1.박찬호 2.최원준 3.김도영 4.최형우 5.나성범', '양현종')
+    """)
+    conn.commit()
+    return conn
 
 # 구단 기본 정보 정의
 KBO_CLUBS = {
@@ -23,16 +70,11 @@ KBO_CLUBS = {
     "키움 히어로즈": {"stadium": "고척 스카이돔", "homepage": "https://www.heroesbaseballclub.co.kr/", "insta": "https://www.instagram.com/heroesbaseballclub/", "emblem": "🦸"}
 }
 
-# 세션 로그인 상태 초기화 (오타 수정 완료: s.session_state -> st.session_state)
+# 세션 상태 초기화
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
     st.session_state["user"] = None
     st.session_state["fav_team"] = "LG 트윈스"
-
-# 데이터베이스가 없으면 자동 생성
-if not os.path.exists("baseball.db"):
-    import baseball_db
-    baseball_db.init_db()
 
 # 로그인 / 회원가입 로직
 if not st.session_state["logged_in"]:
@@ -84,7 +126,6 @@ else:
     st.sidebar.success(f"종합 관제탑 작동 중 ({st.session_state['user']}님)")
     st.title(f"{st.session_state['fav_team']} 매치 포트")
     
-    # 선호 구단 정보 로드
     team_data = KBO_CLUBS[st.session_state["fav_team"]]
     
     col1, col2 = st.columns([1, 4])
@@ -103,3 +144,4 @@ else:
         st.session_state["logged_in"] = False
         st.session_state["user"] = None
         st.rerun()
+
